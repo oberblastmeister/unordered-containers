@@ -1840,30 +1840,28 @@ intersectionArrayBy f !b1 !b2 !ary1 !ary2
   | b1 .&. b2 == 0 = Empty
   | otherwise = runST $ do
     mary <- A.new_ $ popCount bIntersect
-    -- iterate over nonzero bits of b1 .|. b2
-    let go !i !i1 !i2 !b !bFinal
+    -- iterate over nonzero bits of b1 .&. b2
+    let go !i !b !bFinal
           | b == 0 = pure (i, bFinal)
-          | testBit $ b1 .&. b2 = do
+          | otherwise = do
             x1 <- A.indexM ary1 i1
             x2 <- A.indexM ary2 i2
             case f x1 x2 of
-              Empty -> go i (i1 + 1) (i2 + 1) b' (bFinal .&. complement m)
+              Empty -> go i b' (bFinal .&. complement m)
               _ -> do
                 A.write mary i $! f x1 x2
-                go (i + 1) (i1 + 1) (i2 + 1) b' bFinal
-          | testBit b1 = go i (i1 + 1) i2 b' bFinal
-          | otherwise = go i i1 (i2 + 1) b' bFinal
+                go (i + 1) b' bFinal
           where
             m = 1 `unsafeShiftL` countTrailingZeros b
-            testBit x = x .&. m /= 0
+            i1 = sparseIndex b1 m
+            i2 = sparseIndex b2 m
             b' = b .&. complement m
-    (len, bFinal) <- go 0 0 0 bCombined bIntersect
+    (len, bFinal) <- go 0 bIntersect bIntersect
     case len of
       0 -> pure Empty
       1 -> A.read mary 0
       _ -> bitmapIndexedOrFull bFinal <$> (A.unsafeFreeze =<< A.shrink mary len)
   where
-    bCombined = b1 .|. b2
     bIntersect = b1 .&. b2
 {-# INLINE intersectionArrayBy #-}
 
